@@ -6,9 +6,10 @@
 #                      \___/_/\_\ .__/ \__,_|\__|
 #                               |_| XML parser
 #
-# Copyright (c) 2016-2022 Sebastian Pipping <sebastian@pipping.org>
+# Copyright (c) 2016-2023 Sebastian Pipping <sebastian@pipping.org>
 # Copyright (c) 2019      Philippe Antoine <contact@catenacyber.fr>
 # Copyright (c) 2019      Hanno Böck <hanno@gentoo.org>
+# Copyright (c) 2024      Alexander Bluhm <alexander.bluhm@gmx.net>
 # Licensed under the MIT license:
 #
 # Permission is  hereby granted,  free of charge,  to any  person obtaining
@@ -76,7 +77,7 @@ populate_environment() {
             ;;
     esac
 
-    : ${BASE_COMPILE_FLAGS:="-pipe -Wall -Wextra -pedantic -Wno-overlength-strings -Wno-long-long"}
+    : ${BASE_COMPILE_FLAGS:="-pipe -Wall -Wextra -pedantic -Wno-overlength-strings"}
     : ${BASE_LINK_FLAGS:=}
 
     if [[ ${QA_COMPILER} = clang ]]; then
@@ -90,6 +91,10 @@ populate_environment() {
                 if [[ "$(uname -s)" != Darwin* ]]; then
                     export ASAN_OPTIONS=detect_leaks=1
                 fi
+                ;;
+            cfi)
+                BASE_COMPILE_FLAGS+=' -fsanitize=cfi -flto -fvisibility=hidden -fno-sanitize-trap=all -fsanitize-cfi-cross-dso'
+                BASE_LINK_FLAGS+=' -fuse-ld=gold'
                 ;;
             memory)
                 # http://clang.llvm.org/docs/MemorySanitizer.html
@@ -114,7 +119,7 @@ populate_environment() {
 
 
     CFLAGS="-std=c99 ${BASE_COMPILE_FLAGS} ${CFLAGS:-}"
-    CXXFLAGS="-std=c++98 ${BASE_COMPILE_FLAGS} ${CXXFLAGS:-}"
+    CXXFLAGS="-std=c++11 ${BASE_COMPILE_FLAGS} ${CXXFLAGS:-}"
     LDFLAGS="${BASE_LINK_FLAGS} ${LDFLAGS:-}"
 }
 
@@ -188,7 +193,7 @@ run_processor() {
         local DOT_FORMAT="${DOT_FORMAT:-svg}"
         local o="callgraph.${DOT_FORMAT}"
         ANNOUNCE "egypt ...... | dot ...... > ${o}"
-        find -name '*.expand' \
+        find . -name '*.expand' \
                 | sort \
                 | xargs -r egypt \
                 | unflatten -c 20 \
@@ -205,7 +210,7 @@ run_processor() {
         )
         done
 
-        RUN find -name '*.gcov' | sort
+        RUN find . -name '*.gcov' | sort
         ;;
     esac
 }
@@ -227,7 +232,7 @@ dump_config() {
 Configuration:
   QA_COMPILER=${QA_COMPILER}  # auto-detected from \$CC and \$CXX
   QA_PROCESSOR=${QA_PROCESSOR}  # GCC only
-  QA_SANITIZER=${QA_SANITIZER}  # Clang only
+  QA_SANITIZER=${QA_SANITIZER}
 
   CFLAGS=${CFLAGS}
   CXXFLAGS=${CXXFLAGS}
@@ -271,12 +276,13 @@ process_config() {
     esac
 
 
-    if [[ ${QA_COMPILER} != clang && -n ${QA_SANITIZER:-} ]]; then
+    if [[ ${QA_COMPILER} != clang && ( ${QA_SANITIZER:-} == cfi || ${QA_SANITIZER:-} == memory ) ]]; then
         WARNING "QA_COMPILER=${QA_COMPILER} is not 'clang' -- ignoring QA_SANITIZER=${QA_SANITIZER}" >&2
+        QA_SANITIZER=
     fi
 
     case "${QA_SANITIZER:=address}" in
-        address|memory|undefined) ;;
+        address|cfi|memory|undefined) ;;
         *) usage; exit 1 ;;
     esac
 }
@@ -288,9 +294,9 @@ Usage:
   $ ./qa.sh [ARG ..]
 
 Environment variables
-  QA_COMPILER=(clang|gcc)                  # default: auto-detected
-  QA_PROCESSOR=(egypt|gcov)                # default: gcov
-  QA_SANITIZER=(address|memory|undefined)  # default: address
+  QA_COMPILER=(clang|gcc)                      # default: auto-detected
+  QA_PROCESSOR=(egypt|gcov)                    # default: gcov
+  QA_SANITIZER=(address|cfi|memory|undefined)  # default: address
 
 EOF
 }

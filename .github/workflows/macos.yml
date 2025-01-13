@@ -5,7 +5,9 @@
 #                      \___/_/\_\ .__/ \__,_|\__|
 #                               |_| XML parser
 #
-# Copyright (c) 2020-2022 Sebastian Pipping <sebastian@pipping.org>
+# Copyright (c) 2020-2024 Sebastian Pipping <sebastian@pipping.org>
+# Copyright (c) 2023      Joyce Brum <joycebrum@google.com>
+# Copyright (c) 2024      Dag-Erling Smørgrav <des@des.dev>
 # Licensed under the MIT license:
 #
 # Permission is  hereby granted,  free of charge,  to any  person obtaining
@@ -34,6 +36,7 @@ on:
   push:
   schedule:
     - cron: '0 2 * * 5'  # Every Friday at 2am
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -43,17 +46,15 @@ jobs:
     name: Perform checks
     strategy:
       matrix:
+        os: [macos-13, macos-15]
         include:
-          # NOTE: This is a quick port from .travis.yml in reaction to
-          #       Homebrew issues at Travis CI.  While we have the matrix
-          #       in two places, please keep the two files in sync.  Thank you!
           - MODE: cmake-oos
           - MODE: distcheck
           - MODE: qa-sh
             FLAT_ENV: CC=clang CXX=clang++ LD=clang++ QA_SANITIZER=address
-    runs-on: macos-11
+    runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9  # v3.5.3
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
     - name: Install build dependencies
       run: |
         sudo rm /usr/local/bin/2to3  # so that "brew link" will work
